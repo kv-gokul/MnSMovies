@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MnSMovies</string>
+    <string name="text_movie_title">Movie Title</string>
+</resources>
