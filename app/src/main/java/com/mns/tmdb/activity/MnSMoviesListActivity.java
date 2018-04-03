@@ -2,6 +2,7 @@ package com.mns.tmdb.activity;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.GridView;
@@ -17,9 +18,10 @@ import java.util.List;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Created by gokul on 26/3/18.
@@ -27,9 +29,12 @@ import retrofit2.Response;
 
 public class MnSMoviesListActivity extends MnSBaseActivity {
 
+    private static final String TAG = MnSMoviesListActivity.class.getSimpleName();
+
     @InjectView(R.id.movies_gridview)
     GridView moviesGrid;
     private List<Movie> moviesList;
+    private Disposable disposable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,21 +47,23 @@ public class MnSMoviesListActivity extends MnSBaseActivity {
     private void getNowPlayingMovies() {
         if (!MnSMoviesConstants.TMDB_API_KEY.isEmpty()) {
             showDialog(this);
-            Call<MoviesResponse> moviesCall = getMnSMoviesAPIService().
-                    getNowPlayingMovies(MnSMoviesConstants.TMDB_API_KEY);
-            moviesCall.enqueue(new Callback<MoviesResponse>() {
-                @Override
-                public void onResponse(Call<MoviesResponse> call, Response<MoviesResponse> response) {
-                    moviesList = response.body().getResults();
-                    loadMoviesGrid();
-                    dismissDialog();
-                }
-
-                @Override
-                public void onFailure(Call<MoviesResponse> call, Throwable t) {
-                    dismissDialog();
-                }
-            });
+            disposable = getMnSMoviesAPIService().getNowPlayingMovies(MnSMoviesConstants.TMDB_API_KEY)
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                            new Consumer<MoviesResponse>() {
+                                @Override
+                                public void accept(MoviesResponse moviesResponse) throws Exception {
+                                    moviesList = moviesResponse.getResults();
+                                    loadMoviesGrid();
+                                    dismissDialog();
+                                }
+                            }, new Consumer<Throwable>() {
+                                @Override
+                                public void accept(Throwable throwable) throws Exception {
+                                    Log.i(TAG, throwable.getMessage());
+                                }
+                            });
         } else {
             Toast.makeText(getApplicationContext(), "Get your API key first", Toast.LENGTH_LONG).show();
         }
@@ -79,6 +86,9 @@ public class MnSMoviesListActivity extends MnSBaseActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
         moviesList = null;
     }
 }
